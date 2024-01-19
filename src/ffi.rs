@@ -341,7 +341,7 @@ mod test {
             push_input_numeric_i8(ctx_ptr, a.as_ptr(), 3);
 
             let b = CString::new("b".as_bytes()).unwrap();
-            push_input_numeric_i8(ctx_ptr, b.as_ptr(), 3);
+            push_input_numeric_i8(ctx_ptr, b.as_ptr(), 11);
 
             let mut proof_bytes_ptr: *mut Buffer = std::ptr::null_mut();
             let mut inputs_bytes_ptr: *mut Buffer = std::ptr::null_mut();
