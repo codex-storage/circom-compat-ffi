@@ -149,6 +149,7 @@ pub unsafe extern "C" fn release_circom_compat(ctx_ptr: &mut *mut CircomCompatCt
     }
 }
 
+#[no_mangle]
 pub unsafe extern "C" fn release_buffer(buff_ptr: &mut *mut Buffer) {
     if !buff_ptr.is_null() {
         let buff = &mut Box::from_raw(*buff_ptr);
