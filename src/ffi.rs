@@ -3,7 +3,7 @@ use std::{
     ffi::{c_char, CStr},
     fs::File,
     os::raw::c_void,
-    panic::{catch_unwind, AssertUnwindSafe}, io::Cursor,
+    panic::{catch_unwind, AssertUnwindSafe},
 };
 
 use ark_bn254::{Bn254, Fr};
