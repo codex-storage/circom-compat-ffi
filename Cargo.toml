@@ -25,3 +25,5 @@ ark-poly = { version = "=0.4.1", default-features = false, features = ["parallel
 ark-relations = { version = "=0.4.0", default-features = false }
 ark-serialize = { version = "=0.4.1", default-features = false }
 ruint = { version = "1.7.0", features = ["serde", "num-bigint", "ark-ff"] }
+num-bigint = "0.4.3"
+

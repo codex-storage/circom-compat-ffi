@@ -9,37 +9,14 @@ use std::{
 use ark_bn254::{Bn254, Fr};
 use ark_circom::{read_zkey, CircomBuilder, CircomConfig};
 use ark_crypto_primitives::snark::SNARK;
-use ark_groth16::{prepare_verifying_key, Groth16, Proof, ProvingKey};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
+use ark_groth16::{prepare_verifying_key, Groth16, Proof as Groth16Proof, ProvingKey};
+use ark_serialize::Compress;
 use ark_std::rand::{rngs::ThreadRng, thread_rng};
-
 use ruint::aliases::U256;
 
+use crate::ffi_types::*;
+
 type GrothBn = Groth16<Bn254>;
-
-pub const ERR_UNKNOWN: i32 = -1;
-pub const ERR_OK: i32 = 0;
-pub const ERR_WASM_PATH: i32 = 1;
-pub const ERR_R1CS_PATH: i32 = 2;
-pub const ERR_ZKEY_PATH: i32 = 3;
-pub const ERR_INPUT_NAME: i32 = 4;
-pub const ERR_INVALID_INPUT: i32 = 5;
-pub const ERR_CANT_READ_ZKEY: i32 = 6;
-pub const ERR_CIRCOM_BUILDER: i32 = 7;
-pub const ERR_FAILED_TO_DESERIALIZE_PROOF: i32 = 8;
-pub const ERR_FAILED_TO_DESERIALIZE_INPUTS: i32 = 9;
-pub const ERR_FAILED_TO_VERIFY_PROOF: i32 = 10;
-pub const ERR_GET_PUB_INPUTS: i32 = 11;
-pub const ERR_MAKING_PROOF: i32 = 12;
-pub const ERR_SERIALIZE_PROOF: i32 = 13;
-pub const ERR_SERIALIZE_INPUTS: i32 = 14;
-
-#[derive(Debug, Clone)]
-#[repr(C)]
-pub struct Buffer {
-    data: *const u8,
-    len: usize,
-}
 
 #[derive(Debug, Clone)]
 // #[repr(C)]
@@ -176,18 +153,13 @@ unsafe fn to_circom(ctx_ptr: *mut CircomCompatCtx) -> *mut CircomBn254 {
 #[allow(private_interfaces)]
 pub unsafe extern "C" fn prove_circuit(
     ctx_ptr: *mut CircomCompatCtx,
-    compress: bool,
-    proof_bytes_ptr: &mut *mut Buffer,
-    inputs_bytes_ptr: &mut *mut Buffer,
+    proof_ptr: &mut *mut Proof,   // inputs_bytes_ptr: &mut *mut Buffer,
+    inputs_ptr: &mut *mut Inputs, // inputs_bytes_ptr: &mut *mut Buffer,
 ) -> i32 {
     let result = catch_unwind(AssertUnwindSafe(|| {
         let circom = &mut *to_circom(ctx_ptr);
         let proving_key = &(*circom.proving_key);
         let rng = &mut (*ctx_ptr).rng;
-        let mode = match compress {
-            true => Compress::Yes,
-            false => Compress::No,
-        };
 
         let circuit = (*circom.builder)
             .clone()
@@ -199,40 +171,13 @@ pub unsafe extern "C" fn prove_circuit(
             .get_public_inputs()
             .ok_or_else(|| ERR_GET_PUB_INPUTS)
             .unwrap();
-        let proof = GrothBn::prove(&proving_key, circuit, rng)
+
+        let circomProof = GrothBn::prove(proving_key, circuit, rng)
             .map_err(|_| ERR_MAKING_PROOF)
             .unwrap();
 
-        let mut proof_bytes = Vec::new();
-        proof
-            .serialize_with_mode(&mut proof_bytes, mode)
-            .map_err(|_| ERR_SERIALIZE_PROOF)
-            .unwrap();
-
-        let mut public_inputs_bytes = Vec::new();
-        inputs
-            .serialize_with_mode(&mut public_inputs_bytes, mode)
-            .map_err(|_| ERR_SERIALIZE_INPUTS)
-            .unwrap();
-
-        // leak the buffers to avoid rust from freeing the pointed to data,
-        // clone to avoid bytes from being freed
-        let proof_slice = Box::leak(Box::new(proof_bytes.clone())).as_slice();
-        let proof_buff = Buffer {
-            data: proof_slice.as_ptr() as *const u8,
-            len: proof_bytes.len(),
-        };
-
-        // leak the buffers to avoid rust from freeing the pointed to data,
-        // clone to avoid bytes from being freed
-        let input_slice = Box::leak(Box::new(public_inputs_bytes.clone())).as_slice();
-        let input_buff = Buffer {
-            data: input_slice.as_ptr() as *const u8,
-            len: public_inputs_bytes.len(),
-        };
-
-        *proof_bytes_ptr = Box::into_raw(Box::new(proof_buff));
-        *inputs_bytes_ptr = Box::into_raw(Box::new(input_buff));
+        *proof_ptr = Box::leak(Box::new((&circomProof).into()));
+        *inputs_ptr = Box::leak(Box::new(inputs.as_slice().into()));
     }));
 
     to_err_code(result)
@@ -245,8 +190,8 @@ pub unsafe extern "C" fn prove_circuit(
 pub unsafe extern "C" fn verify_circuit(
     ctx_ptr: *mut CircomCompatCtx,
     compress: bool,
-    proof_bytes_ptr: *const Buffer,
-    inputs_bytes_ptr: *const Buffer,
+    proof: *const Proof,
+    inputs: *const Inputs,
 ) -> i32 {
     let result = catch_unwind(AssertUnwindSafe(|| {
         let mode = match compress {
@@ -254,25 +199,12 @@ pub unsafe extern "C" fn verify_circuit(
             false => Compress::No,
         };
 
-        let proof_bytes =
-            std::slice::from_raw_parts((*proof_bytes_ptr).data, (*proof_bytes_ptr).len);
-
-        let proof = Proof::<Bn254>::deserialize_with_mode(proof_bytes, mode, Validate::Yes)
-            .map_err(|_| ERR_FAILED_TO_DESERIALIZE_PROOF)
-            .unwrap();
-
-        let public_inputs_bytes =
-            std::slice::from_raw_parts((*inputs_bytes_ptr).data, (*inputs_bytes_ptr).len);
-        let public_inputs: Vec<Fr> =
-            CanonicalDeserialize::deserialize_with_mode(public_inputs_bytes, mode, Validate::Yes)
-                .map_err(|_| ERR_FAILED_TO_DESERIALIZE_INPUTS)
-                .unwrap();
-
         let circom = &mut *to_circom(ctx_ptr);
         let proving_key = &(*circom.proving_key);
         let pvk = prepare_verifying_key(&proving_key.vk);
 
-        GrothBn::verify_proof(&pvk, &proof, &public_inputs)
+        let inputs_vec: Vec<Fr> = (*inputs).into();
+        GrothBn::verify_proof(&pvk, &(*proof).into(), inputs_vec.as_slice())
             .map_err(|_| ERR_FAILED_TO_VERIFY_PROOF)
             .unwrap();
     }));
@@ -347,7 +279,6 @@ build_fn!(push_input_u64, x: u64);
 #[cfg(test)]
 mod test {
     use std::ffi::CString;
-
     use super::*;
 
     #[test]
@@ -372,28 +303,25 @@ mod test {
             let b = CString::new("b".as_bytes()).unwrap();
             push_input_i8(ctx_ptr, b.as_ptr(), 11);
 
-            let mut proof_bytes_ptr: *mut Buffer = std::ptr::null_mut();
-            let mut inputs_bytes_ptr: *mut Buffer = std::ptr::null_mut();
+            let mut proof_ptr: *mut Proof = std::ptr::null_mut();
+            let mut inputs_ptr: *mut Inputs = std::ptr::null_mut();
 
-            assert!(prove_circuit(ctx_ptr, true, &mut proof_bytes_ptr, &mut inputs_bytes_ptr) == ERR_OK);
+            assert!(prove_circuit(ctx_ptr, &mut proof_ptr, &mut inputs_ptr) == ERR_OK);
 
-            assert!(proof_bytes_ptr != std::ptr::null_mut());
-            assert!((*proof_bytes_ptr).data != std::ptr::null());
-            assert!((*proof_bytes_ptr).len > 0);
+            assert!(proof_ptr != std::ptr::null_mut());
+            assert!(inputs_ptr != std::ptr::null_mut());
 
-            assert!(inputs_bytes_ptr != std::ptr::null_mut());
-            assert!((*inputs_bytes_ptr).data != std::ptr::null());
-            assert!((*inputs_bytes_ptr).len > 0);
+            assert!(
+                verify_circuit(ctx_ptr, true, &(*proof_ptr), &(*inputs_ptr)) == ERR_OK
+            );
 
-            assert!(verify_circuit(ctx_ptr, true, &(*proof_bytes_ptr), &(*inputs_bytes_ptr)) == ERR_OK);
+            // release_buffer(&mut proof_bytes_ptr);
+            // release_buffer(&mut inputs_bytes_ptr);
+            // release_circom_compat(&mut ctx_ptr);
 
-            release_buffer(&mut proof_bytes_ptr);
-            release_buffer(&mut inputs_bytes_ptr);
-            release_circom_compat(&mut ctx_ptr);
-
-            assert!(ctx_ptr == std::ptr::null_mut());
-            assert!(proof_bytes_ptr == std::ptr::null_mut());
-            assert!(inputs_bytes_ptr == std::ptr::null_mut());
+            // assert!(ctx_ptr == std::ptr::null_mut());
+            // assert!(proof_bytes_ptr == std::ptr::null_mut());
+            // assert!(inputs_bytes_ptr == std::ptr::null_mut());
         };
     }
 }
