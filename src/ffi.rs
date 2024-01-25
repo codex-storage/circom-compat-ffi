@@ -1,5 +1,10 @@
 use std::{
-    any::Any, ffi::{c_char, CStr}, fs::File, os::raw::c_void, panic::{catch_unwind, AssertUnwindSafe}, ptr::slice_from_raw_parts_mut
+    any::Any,
+    ffi::{c_char, CStr},
+    fs::File,
+    os::raw::c_void,
+    panic::{catch_unwind, AssertUnwindSafe},
+    ptr::slice_from_raw_parts_mut,
 };
 
 use ark_bn254::{Bn254, Fr};
