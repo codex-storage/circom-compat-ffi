@@ -2,12 +2,9 @@ use std::ptr::slice_from_raw_parts;
 
 use ark_bn254::{Bn254, Fq, Fq2, Fr, G1Affine, G2Affine};
 use ark_ff::{BigInteger, PrimeField};
-use ark_groth16::{Groth16, Proof as Groth16Proof};
 use ark_serialize::CanonicalDeserialize;
 use ark_std::Zero;
 use num_bigint::BigUint;
-
-type GrothBn = Groth16<Bn254>;
 
 pub const ERR_UNKNOWN: i32 = -1;
 pub const ERR_OK: i32 = 0;
@@ -106,8 +103,8 @@ impl From<&G2Affine> for G2 {
     }
 }
 
-impl From<&Groth16Proof<Bn254>> for Proof {
-    fn from(src: &Groth16Proof<Bn254>) -> Self {
+impl From<&ark_groth16::Proof<Bn254>> for Proof {
+    fn from(src: &ark_groth16::Proof<Bn254>) -> Self {
         Self {
             a: (&src.a).into(),
             b: (&src.b).into(),
@@ -219,6 +216,7 @@ impl From<Inputs> for Vec<Fr> {
     }
 }
 
+#[cfg(test)]
 mod test {
     use ark_std::UniformRand;
 
