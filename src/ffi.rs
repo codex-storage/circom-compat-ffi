@@ -114,7 +114,7 @@ pub unsafe extern "C" fn init_circom_compat(
 ) -> i32 {
     let result = catch_unwind(AssertUnwindSafe(|| {
         let rng = thread_rng(); // TODO: use a shared rng - how?
-        let builder = CircomBuilder::new((*(*cfg_ptr).cfg).clone());
+        let builder = CircomBuilder::new((*(*cfg_ptr).cfg).clone()); // clone the config
         let circom_bn254 = CircomBn254 {
             builder: Box::into_raw(Box::new(builder)),
             _marker: core::marker::PhantomData,
@@ -138,16 +138,26 @@ pub unsafe extern "C" fn init_circom_compat(
 pub unsafe extern "C" fn release_circom_compat(ctx_ptr: &mut *mut CircomCompatCtx) {
     if !ctx_ptr.is_null() {
         let ctx = &mut Box::from_raw(*ctx_ptr);
+
         if !ctx.circom.is_null() {
             let circom = &mut Box::from_raw(ctx.circom);
             let builder = Box::from_raw(circom.builder);
             drop(builder);
-            let proving_key = Box::from_raw((*ctx.cfg).proving_key);
-            drop(proving_key);
-            let cfg = Box::from_raw((*ctx.cfg).cfg);
-            drop(cfg);
-            *ctx_ptr = std::ptr::null_mut();
         }
+
+        *ctx_ptr = std::ptr::null_mut();
+    }
+}
+
+#[no_mangle]
+#[allow(private_interfaces)]
+pub unsafe extern "C" fn release_cfg(cfg_ptr: &mut *mut CircomBn254Cfg) {
+    if !cfg_ptr.is_null() && !(*cfg_ptr).is_null() {
+        let cfg = Box::from_raw(*cfg_ptr);
+        drop(Box::from_raw((*cfg).proving_key));
+        drop(Box::from_raw((*cfg).cfg));
+        drop(cfg);
+        *cfg_ptr = std::ptr::null_mut();
     }
 }
 
@@ -358,11 +368,10 @@ mod test {
                 &mut cfg_ptr,
             );
 
+            assert!(cfg_ptr != std::ptr::null_mut());
+
             let mut ctx_ptr: *mut CircomCompatCtx = std::ptr::null_mut();
-            init_circom_compat(
-                cfg_ptr,
-                &mut ctx_ptr,
-            );
+            init_circom_compat(cfg_ptr, &mut ctx_ptr);
 
             assert!(ctx_ptr != std::ptr::null_mut());
 
@@ -395,6 +404,12 @@ mod test {
 
             release_key(&mut vk_ptr);
             assert!(vk_ptr == std::ptr::null_mut());
+
+            release_circom_compat(&mut ctx_ptr);
+            assert!(ctx_ptr == std::ptr::null_mut());
+
+            release_cfg(&mut cfg_ptr);
+            assert!(cfg_ptr == std::ptr::null_mut());
         };
     }
 }
