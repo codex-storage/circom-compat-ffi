@@ -33,7 +33,6 @@ struct CircomBn254 {
 #[derive(Debug, Clone)]
 struct CircomCompatCtx {
     circom: *mut CircomBn254,
-    cfg: *mut CircomBn254Cfg,
     rng: ThreadRng,
     _marker: core::marker::PhantomData<(*mut CircomCompatCtx, core::marker::PhantomPinned)>,
 }
@@ -122,7 +121,6 @@ pub unsafe extern "C" fn init_circom_compat(
 
         let circom_compat_ctx = CircomCompatCtx {
             circom: Box::into_raw(Box::new(circom_bn254)),
-            cfg: cfg_ptr,
             rng: rng,
             _marker: core::marker::PhantomData,
         };
@@ -203,13 +201,13 @@ unsafe fn to_circom(ctx_ptr: *mut CircomCompatCtx) -> *mut CircomBn254 {
 #[no_mangle]
 #[allow(private_interfaces)]
 pub unsafe extern "C" fn prove_circuit(
+    cfg_ptr: *mut CircomBn254Cfg,
     ctx_ptr: *mut CircomCompatCtx,
     proof_ptr: &mut *mut Proof, // inputs_bytes_ptr: &mut *mut Buffer,
 ) -> i32 {
     let result = catch_unwind(AssertUnwindSafe(|| {
-        let ctx: &mut CircomCompatCtx = &mut *ctx_ptr;
         let circom = &mut *to_circom(ctx_ptr);
-        let proving_key = (*ctx.cfg).proving_key;
+        let proving_key = (*(*cfg_ptr).proving_key).clone();
         let rng = &mut (*ctx_ptr).rng;
 
         let circuit = (*circom.builder)
@@ -218,7 +216,7 @@ pub unsafe extern "C" fn prove_circuit(
             .map_err(|_| ERR_CIRCOM_BUILDER)
             .unwrap();
 
-        let circom_proof = GrothBn::prove(&*proving_key, circuit, rng)
+        let circom_proof = GrothBn::prove(&proving_key, circuit, rng)
             .map_err(|_| ERR_MAKING_PROOF)
             .unwrap();
 
@@ -255,12 +253,12 @@ pub unsafe extern "C" fn get_pub_inputs(
 #[no_mangle]
 #[allow(private_interfaces)]
 pub unsafe extern "C" fn get_verifying_key(
-    ctx_ptr: *mut CircomCompatCtx,
+    cfg_ptr: *mut CircomBn254Cfg,
     vk_ptr: &mut *mut VerifyingKey, // inputs_bytes_ptr: &mut *mut Buffer,
 ) -> i32 {
     let result = catch_unwind(AssertUnwindSafe(|| {
-        let ctx = &mut *ctx_ptr;
-        let proving_key = &(*(*ctx.cfg).proving_key);
+        let ctx = &mut *cfg_ptr;
+        let proving_key = &(*(*ctx).proving_key);
         let vk = prepare_verifying_key(&proving_key.vk).vk;
 
         *vk_ptr = Box::leak(Box::new((&vk).into()));
@@ -388,10 +386,10 @@ mod test {
             assert!(get_pub_inputs(ctx_ptr, &mut inputs_ptr) == ERR_OK);
             assert!(inputs_ptr != std::ptr::null_mut());
 
-            assert!(prove_circuit(ctx_ptr, &mut proof_ptr) == ERR_OK);
+            assert!(prove_circuit(cfg_ptr, ctx_ptr, &mut proof_ptr) == ERR_OK);
             assert!(proof_ptr != std::ptr::null_mut());
 
-            assert!(get_verifying_key(ctx_ptr, &mut vk_ptr) == ERR_OK);
+            assert!(get_verifying_key(cfg_ptr, &mut vk_ptr) == ERR_OK);
             assert!(vk_ptr != std::ptr::null_mut());
 
             assert!(verify_circuit(&(*proof_ptr), &(*inputs_ptr), &(*vk_ptr)) == ERR_OK);
