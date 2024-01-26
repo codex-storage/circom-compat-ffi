@@ -23,13 +23,6 @@ pub const ERR_MAKING_PROOF: i32 = 12;
 pub const ERR_SERIALIZE_PROOF: i32 = 13;
 pub const ERR_SERIALIZE_INPUTS: i32 = 14;
 
-#[derive(Debug, Clone)]
-#[repr(C)]
-pub struct Buffer {
-    pub data: *const u8,
-    pub len: usize,
-}
-
 // Helper for converting a PrimeField to little endian byte slice
 fn slice_to_point<F: PrimeField>(point: &[u8; 32]) -> F {
     let bigint = F::BigInt::deserialize_uncompressed(&point[..]).expect("always works");
