@@ -238,7 +238,6 @@ pub unsafe extern "C" fn prove_circuit(
             .map_err(|_| ERR_MAKING_PROOF)
             .unwrap();
 
-        println!("proof: {:#?}", circom_proof.a);
         *proof_ptr = Box::leak(Box::new((&circom_proof).into()));
     }));
 
