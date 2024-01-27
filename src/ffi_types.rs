@@ -4,7 +4,6 @@ use ark_bn254::{Bn254, Fq, Fq2, Fr, G1Affine, G2Affine};
 use ark_ff::{BigInteger, PrimeField};
 use ark_serialize::CanonicalDeserialize;
 use ark_std::Zero;
-use num_bigint::BigUint;
 
 // Helper for converting a PrimeField to little endian byte slice
 fn slice_to_point<F: PrimeField>(point: &[u8; 32]) -> F {
@@ -164,9 +163,9 @@ impl From<&ark_groth16::VerifyingKey<Bn254>> for VerifyingKey {
 impl From<&[Fr]> for Inputs {
     fn from(src: &[Fr]) -> Self {
         let els: Vec<[u8; 32]> = src
-            .iter()
-            .map(|point| point_to_slice(*point))
-            .collect();
+          .iter()
+          .map(|point| point_to_slice(*point))
+          .collect();
 
         let len = els.len();
         Self {
@@ -181,10 +180,7 @@ impl From<Inputs> for Vec<Fr> {
         let els: Vec<Fr> = unsafe {
             (&*slice_from_raw_parts(src.elms, src.len))
                 .iter()
-                .map(|point| {
-                    let uint = BigUint::from_bytes_le(point);
-                    Fr::from(uint)
-                })
+                .map(|point| slice_to_point(point))
                 .collect()
         };
 
