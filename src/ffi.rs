@@ -304,18 +304,24 @@ pub unsafe extern "C" fn verify_circuit(
     let result = catch_unwind(AssertUnwindSafe(|| {
         let inputs_vec: Vec<Fr> = (*inputs).into();
         let prepared_key = prepare_verifying_key(&(*pvk).into());
+
         let passed = GrothBn::verify_proof(&prepared_key, &(*proof).into(), inputs_vec.as_slice())
             .map_err(|_| ERR_FAILED_TO_VERIFY_PROOF)
             .unwrap();
 
-        if !passed {
-            ERR_FAILED_TO_VERIFY_PROOF
-        } else {
-            ERR_OK
+        match passed {
+            // println!("proof verified - passed");
+            true => ERR_OK,
+            // println!("proof verified - failed");
+            false => ERR_FAILED_TO_VERIFY_PROOF,
         }
     }));
 
-    to_err_code(result)
+    // println!("result: {:?}", result);
+    match result {
+        Err(e) => to_err_code(Err(e)),
+        Ok(c) => c,
+    }
 }
 
 #[no_mangle]
