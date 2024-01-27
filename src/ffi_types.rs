@@ -6,23 +6,6 @@ use ark_serialize::CanonicalDeserialize;
 use ark_std::Zero;
 use num_bigint::BigUint;
 
-pub const ERR_UNKNOWN: i32 = -1;
-pub const ERR_OK: i32 = 0;
-pub const ERR_WASM_PATH: i32 = 1;
-pub const ERR_R1CS_PATH: i32 = 2;
-pub const ERR_ZKEY_PATH: i32 = 3;
-pub const ERR_INPUT_NAME: i32 = 4;
-pub const ERR_INVALID_INPUT: i32 = 5;
-pub const ERR_CANT_READ_ZKEY: i32 = 6;
-pub const ERR_CIRCOM_BUILDER: i32 = 7;
-pub const ERR_FAILED_TO_DESERIALIZE_PROOF: i32 = 8;
-pub const ERR_FAILED_TO_DESERIALIZE_INPUTS: i32 = 9;
-pub const ERR_FAILED_TO_VERIFY_PROOF: i32 = 10;
-pub const ERR_GET_PUB_INPUTS: i32 = 11;
-pub const ERR_MAKING_PROOF: i32 = 12;
-pub const ERR_SERIALIZE_PROOF: i32 = 13;
-pub const ERR_SERIALIZE_INPUTS: i32 = 14;
-
 // Helper for converting a PrimeField to little endian byte slice
 fn slice_to_point<F: PrimeField>(point: &[u8; 32]) -> F {
     let bigint = F::BigInt::deserialize_uncompressed(&point[..]).expect("always works");
@@ -182,7 +165,7 @@ impl From<&[Fr]> for Inputs {
     fn from(src: &[Fr]) -> Self {
         let els: Vec<[u8; 32]> = src
             .iter()
-            .map(|point| point.0.to_bytes_le().try_into().unwrap())
+            .map(|point| point_to_slice(*point))
             .collect();
 
         let len = els.len();
