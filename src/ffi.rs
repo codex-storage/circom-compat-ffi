@@ -3,7 +3,6 @@ use std::{
     ffi::{c_char, CStr},
     fs::File,
     panic::{catch_unwind, AssertUnwindSafe},
-    ptr::slice_from_raw_parts,
     ptr::slice_from_raw_parts_mut,
 };
 
@@ -55,7 +54,7 @@ struct CircomCompatCtx {
     _marker: core::marker::PhantomData<(*mut CircomCompatCtx, core::marker::PhantomPinned)>,
 }
 
-fn to_err_code(result: Result<(), Box<dyn Any + Send>>) -> i32 {
+fn to_err_code(result: Result<i32, Box<dyn Any + Send>>) -> i32 {
     match result {
         Ok(_) => ERR_OK,
         Err(e) => match e.downcast_ref::<i32>() {
@@ -118,6 +117,8 @@ pub unsafe extern "C" fn init_circom_config(
         };
 
         *cfg_ptr = Box::into_raw(Box::new(circom_bn254_cfg));
+
+        ERR_OK
     }));
 
     to_err_code(result)
@@ -144,6 +145,8 @@ pub unsafe extern "C" fn init_circom_compat(
         };
 
         *ctx_ptr = Box::into_raw(Box::new(circom_compat_ctx));
+
+        ERR_OK
     }));
 
     to_err_code(result)
@@ -239,6 +242,8 @@ pub unsafe extern "C" fn prove_circuit(
             .unwrap();
 
         *proof_ptr = Box::leak(Box::new((&circom_proof).into()));
+
+        ERR_OK
     }));
 
     to_err_code(result)
@@ -263,6 +268,8 @@ pub unsafe extern "C" fn get_pub_inputs(
             .ok_or_else(|| ERR_GET_PUB_INPUTS)
             .unwrap();
         *inputs_ptr = Box::leak(Box::new(inputs.as_slice().into()));
+
+        ERR_OK
     }));
 
     to_err_code(result)
@@ -280,6 +287,8 @@ pub unsafe extern "C" fn get_verifying_key(
         let vk = prepare_verifying_key(&proving_key.vk).vk;
 
         *vk_ptr = Box::leak(Box::new((&vk).into()));
+
+        ERR_OK
     }));
 
     to_err_code(result)
@@ -295,9 +304,15 @@ pub unsafe extern "C" fn verify_circuit(
     let result = catch_unwind(AssertUnwindSafe(|| {
         let inputs_vec: Vec<Fr> = (*inputs).into();
         let prepared_key = prepare_verifying_key(&(*pvk).into());
-        GrothBn::verify_proof(&prepared_key, &(*proof).into(), inputs_vec.as_slice())
+        let passed = GrothBn::verify_proof(&prepared_key, &(*proof).into(), inputs_vec.as_slice())
             .map_err(|_| ERR_FAILED_TO_VERIFY_PROOF)
             .unwrap();
+
+        if !passed {
+            ERR_FAILED_TO_VERIFY_PROOF
+        } else {
+            ERR_OK
+        }
     }));
 
     to_err_code(result)
@@ -329,6 +344,8 @@ pub unsafe extern "C" fn push_input_u256_array(
         input
             .iter()
             .for_each(|c| (*circom.builder).push_input(name, *c));
+
+        ERR_OK
     }));
 
     to_err_code(result)
@@ -350,6 +367,8 @@ macro_rules! build_fn
 
                 let circom = &mut *to_circom(ctx_ptr);
                 (*circom.builder).push_input(name, input);
+
+                ERR_OK
             }));
 
             to_err_code(result)
