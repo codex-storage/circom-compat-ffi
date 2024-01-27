@@ -351,16 +351,14 @@ pub unsafe extern "C" fn push_input_u256_array(
             .map_err(|_| ERR_INPUT_NAME)
             .unwrap();
 
-        let input = {
-            let slice = std::slice::from_raw_parts(input_ptr, len);
-            slice
-                .chunks(U256::BYTES)
-                .map(|c| U256::try_from_le_slice(c).ok_or(ERR_INVALID_INPUT).unwrap())
-                .collect::<Vec<U256>>()
-        };
+        let slice = std::slice::from_raw_parts(input_ptr, len);
+        let inputs = slice
+            .chunks(U256::BYTES)
+            .map(|c| U256::try_from_le_slice(c).ok_or(ERR_INVALID_INPUT).unwrap())
+            .collect::<Vec<U256>>();
 
         let circom = &mut *to_circom(ctx_ptr);
-        input
+        inputs
             .iter()
             .for_each(|c| (*circom.builder).push_input(name, *c));
 
@@ -410,8 +408,8 @@ mod test {
 
     #[test]
     fn proof_verify() {
-        let r1cs_path = CString::new("./fixtures/mycircuit.r1cs".as_bytes()).unwrap();
-        let wasm_path = CString::new("./fixtures/mycircuit.wasm".as_bytes()).unwrap();
+        let r1cs_path = CString::new("./fixtures/circom2_multiplier2.r1cs".as_bytes()).unwrap();
+        let wasm_path = CString::new("./fixtures/circom2_multiplier2.wasm".as_bytes()).unwrap();
 
         unsafe {
             let mut cfg_ptr: *mut CircomBn254Cfg = std::ptr::null_mut();
