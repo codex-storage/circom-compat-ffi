@@ -66,14 +66,15 @@ fn to_err_code(result: Result<i32, Box<dyn Any + Send>>) -> i32 {
 
 #[no_mangle]
 #[allow(private_interfaces)]
-pub unsafe extern "C" fn init_circom_config(
+pub unsafe extern "C" fn init_circom_config_with_checks(
     r1cs_path: *const c_char,
     wasm_path: *const c_char,
     zkey_path: *const c_char,
+    sanity_check: bool,
     cfg_ptr: &mut *mut CircomBn254Cfg,
 ) -> i32 {
     let result = catch_unwind(AssertUnwindSafe(|| {
-        let cfg = CircomConfig::<Bn254>::new(
+        let mut cfg = CircomConfig::<Bn254>::new(
             CStr::from_ptr(wasm_path)
                 .to_str()
                 .map_err(|_| ERR_WASM_PATH)
@@ -86,6 +87,7 @@ pub unsafe extern "C" fn init_circom_config(
         .map_err(|_| ERR_CIRCOM_BUILDER)
         .unwrap();
 
+        cfg.sanity_check = sanity_check;
         let proving_key = if !zkey_path.is_null() {
             let mut file = File::open(
                 CStr::from_ptr(zkey_path)
@@ -122,6 +124,17 @@ pub unsafe extern "C" fn init_circom_config(
     }));
 
     to_err_code(result)
+}
+
+#[no_mangle]
+#[allow(private_interfaces)]
+pub unsafe extern "C" fn init_circom_config(
+    r1cs_path: *const c_char,
+    wasm_path: *const c_char,
+    zkey_path: *const c_char,
+    cfg_ptr: &mut *mut CircomBn254Cfg,
+) -> i32 {
+    init_circom_config_with_checks(r1cs_path, wasm_path, zkey_path, false, cfg_ptr)
 }
 
 #[no_mangle]
