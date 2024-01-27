@@ -3,6 +3,7 @@ use std::{
     ffi::{c_char, CStr},
     fs::File,
     panic::{catch_unwind, AssertUnwindSafe},
+    ptr::slice_from_raw_parts,
     ptr::slice_from_raw_parts_mut,
 };
 
@@ -16,6 +17,23 @@ use ruint::aliases::U256;
 use crate::ffi_types::*;
 
 type GrothBn = Groth16<Bn254>;
+
+pub const ERR_UNKNOWN: i32 = -1;
+pub const ERR_OK: i32 = 0;
+pub const ERR_WASM_PATH: i32 = 1;
+pub const ERR_R1CS_PATH: i32 = 2;
+pub const ERR_ZKEY_PATH: i32 = 3;
+pub const ERR_INPUT_NAME: i32 = 4;
+pub const ERR_INVALID_INPUT: i32 = 5;
+pub const ERR_CANT_READ_ZKEY: i32 = 6;
+pub const ERR_CIRCOM_BUILDER: i32 = 7;
+pub const ERR_FAILED_TO_DESERIALIZE_PROOF: i32 = 8;
+pub const ERR_FAILED_TO_DESERIALIZE_INPUTS: i32 = 9;
+pub const ERR_FAILED_TO_VERIFY_PROOF: i32 = 10;
+pub const ERR_GET_PUB_INPUTS: i32 = 11;
+pub const ERR_MAKING_PROOF: i32 = 12;
+pub const ERR_SERIALIZE_PROOF: i32 = 13;
+pub const ERR_SERIALIZE_INPUTS: i32 = 14;
 
 #[derive(Debug, Clone)]
 struct CircomBn254Cfg {
@@ -220,6 +238,7 @@ pub unsafe extern "C" fn prove_circuit(
             .map_err(|_| ERR_MAKING_PROOF)
             .unwrap();
 
+        println!("proof: {:#?}", circom_proof.a);
         *proof_ptr = Box::leak(Box::new((&circom_proof).into()));
     }));
 
