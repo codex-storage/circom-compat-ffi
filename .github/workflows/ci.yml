@@ -10,10 +10,11 @@ env:
 jobs:
   build_and_test:
     name: Rust project - latest
-    runs-on: ubuntu-latest
+    runs-on: ${{matrix.os}}
     continue-on-error: true
     strategy:
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         toolchain:
           - stable
           - beta
