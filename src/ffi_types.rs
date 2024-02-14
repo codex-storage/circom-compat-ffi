@@ -147,7 +147,9 @@ impl From<VerifyingKey> for ark_groth16::VerifyingKey<Bn254> {
 
 impl From<&ark_groth16::VerifyingKey<Bn254>> for VerifyingKey {
     fn from(vk: &ark_groth16::VerifyingKey<Bn254>) -> Self {
-        let ic: Vec<G1> = vk.gamma_abc_g1.iter().map(|p| p.into()).collect();
+        let mut ic: Vec<G1> = vk.gamma_abc_g1.iter().map(|p| p.into()).collect();
+        ic.shrink_to_fit();
+
         let len = ic.len();
         Self {
             alpha1: G1::from(&vk.alpha_g1),
@@ -162,11 +164,12 @@ impl From<&ark_groth16::VerifyingKey<Bn254>> for VerifyingKey {
 
 impl From<&[Fr]> for Inputs {
     fn from(src: &[Fr]) -> Self {
-        let els: Vec<[u8; 32]> = src
+        let mut els: Vec<[u8; 32]> = src
           .iter()
           .map(|point| point_to_slice(*point))
           .collect();
 
+        els.shrink_to_fit();
         let len = els.len();
         Self {
             elms: Box::leak(els.into_boxed_slice()).as_ptr(),
