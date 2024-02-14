@@ -7,7 +7,7 @@ use std::{
 };
 
 use ark_bn254::{Bn254, Fr};
-use ark_circom::{read_zkey, CircomBuilder, CircomConfig};
+use ark_circom::{read_zkey, CircomBuilder, CircomConfig, CircomReduction};
 use ark_crypto_primitives::snark::SNARK;
 use ark_groth16::{prepare_verifying_key, Groth16, ProvingKey};
 use ark_std::rand::{rngs::ThreadRng, thread_rng};
@@ -15,7 +15,7 @@ use ruint::aliases::U256;
 
 use crate::ffi_types::*;
 
-type GrothBn = Groth16<Bn254>;
+type GrothBn = Groth16<Bn254, CircomReduction>;
 
 pub const ERR_UNKNOWN: i32 = -1;
 pub const ERR_OK: i32 = 0;
@@ -104,7 +104,7 @@ pub unsafe extern "C" fn init_circom_config_with_checks(
         } else {
             let mut rng = thread_rng();
             let builder = CircomBuilder::new(cfg.clone());
-            Groth16::<Bn254>::generate_random_parameters_with_reduction::<_>(
+            GrothBn::generate_random_parameters_with_reduction::<_>(
                 builder.setup(),
                 &mut rng,
             )
@@ -410,13 +410,74 @@ mod test {
     fn proof_verify() {
         let r1cs_path = CString::new("./fixtures/circom2_multiplier2.r1cs".as_bytes()).unwrap();
         let wasm_path = CString::new("./fixtures/circom2_multiplier2.wasm".as_bytes()).unwrap();
+        let zkey_path = CString::new("./fixtures/test.zkey".as_bytes()).unwrap();
 
         unsafe {
             let mut cfg_ptr: *mut CircomBn254Cfg = std::ptr::null_mut();
             init_circom_config(
                 r1cs_path.as_ptr(),
                 wasm_path.as_ptr(),
-                std::ptr::null(),
+                zkey_path.as_ptr(),
+                &mut cfg_ptr,
+            );
+
+            assert!(cfg_ptr != std::ptr::null_mut());
+
+            let mut ctx_ptr: *mut CircomCompatCtx = std::ptr::null_mut();
+            init_circom_compat(cfg_ptr, &mut ctx_ptr);
+
+            assert!(ctx_ptr != std::ptr::null_mut());
+
+            let a = CString::new("a".as_bytes()).unwrap();
+            push_input_i8(ctx_ptr, a.as_ptr(), 3);
+
+            let b = CString::new("b".as_bytes()).unwrap();
+            push_input_i8(ctx_ptr, b.as_ptr(), 11);
+
+            let mut proof_ptr: *mut Proof = std::ptr::null_mut();
+            let mut inputs_ptr: *mut Inputs = std::ptr::null_mut();
+            let mut vk_ptr: *mut VerifyingKey = std::ptr::null_mut();
+
+            assert!(get_pub_inputs(ctx_ptr, &mut inputs_ptr) == ERR_OK);
+            assert!(inputs_ptr != std::ptr::null_mut());
+
+            assert!(prove_circuit(cfg_ptr, ctx_ptr, &mut proof_ptr) == ERR_OK);
+            assert!(proof_ptr != std::ptr::null_mut());
+
+            assert!(get_verifying_key(cfg_ptr, &mut vk_ptr) == ERR_OK);
+            assert!(vk_ptr != std::ptr::null_mut());
+
+            assert!(verify_circuit(&(*proof_ptr), &(*inputs_ptr), &(*vk_ptr)) == ERR_OK);
+
+            release_inputs(&mut inputs_ptr);
+            assert!(inputs_ptr == std::ptr::null_mut());
+
+            release_proof(&mut proof_ptr);
+            assert!(proof_ptr == std::ptr::null_mut());
+
+            release_key(&mut vk_ptr);
+            assert!(vk_ptr == std::ptr::null_mut());
+
+            release_circom_compat(&mut ctx_ptr);
+            assert!(ctx_ptr == std::ptr::null_mut());
+
+            release_cfg(&mut cfg_ptr);
+            assert!(cfg_ptr == std::ptr::null_mut());
+        };
+    }
+
+    #[test]
+    fn proof_verify_with_zkey() {
+        let r1cs_path = CString::new("./fixtures/mycircuit.r1cs".as_bytes()).unwrap();
+        let wasm_path = CString::new("./fixtures/mycircuit.wasm".as_bytes()).unwrap();
+        let zkey_path = CString::new("./fixtures/test.zkey".as_bytes()).unwrap();
+
+        unsafe {
+            let mut cfg_ptr: *mut CircomBn254Cfg = std::ptr::null_mut();
+            init_circom_config(
+                r1cs_path.as_ptr(),
+                wasm_path.as_ptr(),
+                zkey_path.as_ptr(),
                 &mut cfg_ptr,
             );
 
