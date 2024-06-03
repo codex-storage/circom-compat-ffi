@@ -18,7 +18,7 @@ crate-type = [
 
 [dependencies]
 
-ark-circom = { git = "https://github.com/codex-storage/circom-compat.git#71f1ceb11aef27256", features = ["circom-2", "ethereum"]}
+ark-circom = { git = "https://github.com/codex-storage/circom-compat.git", rev = "71f1ceb11aef27256", features = ["circom-2", "ethereum"]}
 
 ark-crypto-primitives = { version = "=0.4.0" }
 ark-ec = { version = "=0.4.1", default-features = false, features = ["parallel"] }
