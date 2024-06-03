@@ -67,7 +67,7 @@ fn to_err_code(result: Result<i32, Box<dyn Any + Send>>) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn circom_config_duplicate(
+pub unsafe extern "C" fn duplicate_circom_config(
     orig_cfg_ptr: *mut CircomBn254Cfg,
     cfg_ptr: &mut *mut CircomBn254Cfg,
 ) -> i32 {
