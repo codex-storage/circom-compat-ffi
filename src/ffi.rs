@@ -65,6 +65,31 @@ fn to_err_code(result: Result<i32, Box<dyn Any + Send>>) -> i32 {
 
 #[no_mangle]
 #[allow(private_interfaces)]
+pub unsafe extern "C" fn circom_config_duplicate(
+    orig_cfg_ptr: *mut CircomBn254Cfg,
+    cfg_ptr: &mut *mut CircomBn254Cfg,
+) -> i32 {
+    let result = catch_unwind(AssertUnwindSafe(|| {
+
+        let cfg = (*(*orig_cfg_ptr).cfg).clone();
+        let proving_key = (*(*orig_cfg_ptr).proving_key).clone();
+
+        let circom_bn254_cfg = CircomBn254Cfg {
+            cfg: Box::into_raw(Box::new(cfg)),
+            proving_key: Box::into_raw(Box::new(proving_key)),
+            _marker: std::marker::PhantomData,
+        };
+
+        *cfg_ptr = Box::into_raw(Box::new(circom_bn254_cfg));
+
+        ERR_OK
+    }));
+
+    to_err_code(result)
+}
+
+#[no_mangle]
+#[allow(private_interfaces)]
 pub unsafe extern "C" fn init_circom_config_with_checks(
     r1cs_path: *const c_char,
     wasm_path: *const c_char,
