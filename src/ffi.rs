@@ -35,20 +35,23 @@ pub const ERR_SERIALIZE_PROOF: i32 = 13;
 pub const ERR_SERIALIZE_INPUTS: i32 = 14;
 
 #[derive(Debug, Clone)]
-struct CircomBn254Cfg {
+#[repr(C)]
+pub struct CircomBn254Cfg {
     cfg: *mut CircomConfig<Bn254>,
     proving_key: *mut ProvingKey<Bn254>,
     _marker: core::marker::PhantomData<(*mut CircomBn254Cfg, core::marker::PhantomPinned)>,
 }
 
 #[derive(Debug, Clone)]
-struct CircomBn254 {
+#[repr(C)]
+pub struct CircomBn254 {
     builder: *mut CircomBuilder<Bn254>,
     _marker: core::marker::PhantomData<(*mut CircomBn254, core::marker::PhantomPinned)>,
 }
 
 #[derive(Debug, Clone)]
-struct CircomCompatCtx {
+#[repr(C)]
+pub struct CircomCompatCtx {
     circom: *mut CircomBn254,
     _marker: core::marker::PhantomData<(*mut CircomCompatCtx, core::marker::PhantomPinned)>,
 }
@@ -64,7 +67,6 @@ fn to_err_code(result: Result<i32, Box<dyn Any + Send>>) -> i32 {
 }
 
 #[no_mangle]
-#[allow(private_interfaces)]
 pub unsafe extern "C" fn circom_config_duplicate(
     orig_cfg_ptr: *mut CircomBn254Cfg,
     cfg_ptr: &mut *mut CircomBn254Cfg,
@@ -89,7 +91,6 @@ pub unsafe extern "C" fn circom_config_duplicate(
 }
 
 #[no_mangle]
-#[allow(private_interfaces)]
 pub unsafe extern "C" fn init_circom_config_with_checks(
     r1cs_path: *const c_char,
     wasm_path: *const c_char,
@@ -151,7 +152,6 @@ pub unsafe extern "C" fn init_circom_config_with_checks(
 }
 
 #[no_mangle]
-#[allow(private_interfaces)]
 pub unsafe extern "C" fn init_circom_config(
     r1cs_path: *const c_char,
     wasm_path: *const c_char,
@@ -162,7 +162,6 @@ pub unsafe extern "C" fn init_circom_config(
 }
 
 #[no_mangle]
-#[allow(private_interfaces)]
 pub unsafe extern "C" fn init_circom_compat(
     cfg_ptr: *mut CircomBn254Cfg,
     ctx_ptr: &mut *mut CircomCompatCtx,
@@ -188,7 +187,6 @@ pub unsafe extern "C" fn init_circom_compat(
 }
 
 #[no_mangle]
-#[allow(private_interfaces)]
 pub unsafe extern "C" fn release_circom_compat(ctx_ptr: &mut *mut CircomCompatCtx) {
     if !ctx_ptr.is_null() {
         let ctx = &mut Box::from_raw(*ctx_ptr);
@@ -204,7 +202,6 @@ pub unsafe extern "C" fn release_circom_compat(ctx_ptr: &mut *mut CircomCompatCt
 }
 
 #[no_mangle]
-#[allow(private_interfaces)]
 pub unsafe extern "C" fn release_cfg(cfg_ptr: &mut *mut CircomBn254Cfg) {
     if !cfg_ptr.is_null() && !(*cfg_ptr).is_null() {
         let cfg = Box::from_raw(*cfg_ptr);
@@ -255,7 +252,6 @@ unsafe fn to_circom(ctx_ptr: *mut CircomCompatCtx) -> *mut CircomBn254 {
 }
 
 #[no_mangle]
-#[allow(private_interfaces)]
 pub unsafe extern "C" fn prove_circuit(
     cfg_ptr: *mut CircomBn254Cfg,
     ctx_ptr: *mut CircomCompatCtx,
@@ -285,7 +281,6 @@ pub unsafe extern "C" fn prove_circuit(
 }
 
 #[no_mangle]
-#[allow(private_interfaces)]
 pub unsafe extern "C" fn get_pub_inputs(
     ctx_ptr: *mut CircomCompatCtx,
     inputs_ptr: &mut *mut Inputs, // inputs_bytes_ptr: &mut *mut Buffer,
@@ -311,7 +306,6 @@ pub unsafe extern "C" fn get_pub_inputs(
 }
 
 #[no_mangle]
-#[allow(private_interfaces)]
 pub unsafe extern "C" fn get_verifying_key(
     cfg_ptr: *mut CircomBn254Cfg,
     vk_ptr: &mut *mut VerifyingKey, // inputs_bytes_ptr: &mut *mut Buffer,
@@ -330,7 +324,6 @@ pub unsafe extern "C" fn get_verifying_key(
 }
 
 #[no_mangle]
-#[allow(private_interfaces)]
 pub unsafe extern "C" fn verify_circuit(
     proof: *const Proof,
     inputs: *const Inputs,
@@ -360,7 +353,6 @@ pub unsafe extern "C" fn verify_circuit(
 }
 
 #[no_mangle]
-#[allow(private_interfaces)]
 pub unsafe extern "C" fn push_input_u256_array(
     ctx_ptr: *mut CircomCompatCtx,
     name_ptr: *const c_char,
@@ -394,7 +386,6 @@ macro_rules! build_fn
 {
     ($name:tt, $($v:ident: $t:ty),*) => {
         #[no_mangle]
-        #[allow(private_interfaces)]
         pub unsafe extern "C" fn $name(
             ctx_ptr: *mut CircomCompatCtx,
             name_ptr: *const c_char,
