@@ -12,7 +12,6 @@ pkgs.rustPlatform.buildRustPackage {
   };
 
   CARGO_HOME = "/tmp";
-  cargoBuildFlags = ["--release"];
 
   meta = with pkgs.lib; {
     description = "circom-compat (ark-circom) ffi";
