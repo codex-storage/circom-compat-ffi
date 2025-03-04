@@ -164,10 +164,7 @@ impl From<&ark_groth16::VerifyingKey<Bn254>> for VerifyingKey {
 
 impl From<&[Fr]> for Inputs {
     fn from(src: &[Fr]) -> Self {
-        let mut els: Vec<[u8; 32]> = src
-          .iter()
-          .map(|point| point_to_slice(*point))
-          .collect();
+        let mut els: Vec<[u8; 32]> = src.iter().map(|point| point_to_slice(*point)).collect();
 
         els.shrink_to_fit();
         let len = els.len();
