@@ -7,4 +7,3 @@ template Multiplier() {
 }
 
 component main = Multiplier();
-

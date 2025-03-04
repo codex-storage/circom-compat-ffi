@@ -6,14 +6,13 @@ use std::{
     ptr::slice_from_raw_parts_mut,
 };
 
+use crate::ffi_types::*;
 use ark_bn254::{Bn254, Fr};
 use ark_circom::{read_zkey, CircomBuilder, CircomConfig, CircomReduction};
 use ark_crypto_primitives::snark::SNARK;
 use ark_groth16::{prepare_verifying_key, Groth16, ProvingKey};
-use ark_std::rand::{rngs::ThreadRng, thread_rng};
+use ark_std::rand::thread_rng;
 use ruint::aliases::U256;
-
-use crate::ffi_types::*;
 
 type GrothBn = Groth16<Bn254, CircomReduction>;
 
@@ -50,7 +49,6 @@ struct CircomBn254 {
 #[derive(Debug, Clone)]
 struct CircomCompatCtx {
     circom: *mut CircomBn254,
-    rng: ThreadRng,
     _marker: core::marker::PhantomData<(*mut CircomCompatCtx, core::marker::PhantomPinned)>,
 }
 
@@ -104,12 +102,9 @@ pub unsafe extern "C" fn init_circom_config_with_checks(
         } else {
             let mut rng = thread_rng();
             let builder = CircomBuilder::new(cfg.clone());
-            GrothBn::generate_random_parameters_with_reduction::<_>(
-                builder.setup(),
-                &mut rng,
-            )
-            .map_err(|_| ERR_UNKNOWN)
-            .unwrap()
+            GrothBn::generate_random_parameters_with_reduction::<_>(builder.setup(), &mut rng)
+                .map_err(|_| ERR_UNKNOWN)
+                .unwrap()
         };
 
         let circom_bn254_cfg = CircomBn254Cfg {
@@ -144,7 +139,6 @@ pub unsafe extern "C" fn init_circom_compat(
     ctx_ptr: &mut *mut CircomCompatCtx,
 ) -> i32 {
     let result = catch_unwind(AssertUnwindSafe(|| {
-        let rng = thread_rng(); // TODO: use a shared rng - how?
         let builder = CircomBuilder::new((*(*cfg_ptr).cfg).clone()); // clone the config
         let circom_bn254 = CircomBn254 {
             builder: Box::into_raw(Box::new(builder)),
@@ -153,7 +147,6 @@ pub unsafe extern "C" fn init_circom_compat(
 
         let circom_compat_ctx = CircomCompatCtx {
             circom: Box::into_raw(Box::new(circom_bn254)),
-            rng: rng,
             _marker: core::marker::PhantomData,
         };
 
@@ -242,7 +235,7 @@ pub unsafe extern "C" fn prove_circuit(
     let result = catch_unwind(AssertUnwindSafe(|| {
         let circom = &mut *to_circom(ctx_ptr);
         let proving_key = (*(*cfg_ptr).proving_key).clone();
-        let rng = &mut (*ctx_ptr).rng;
+        let mut rng = thread_rng();
 
         let circuit = (*circom.builder)
             .clone()
@@ -250,7 +243,7 @@ pub unsafe extern "C" fn prove_circuit(
             .map_err(|_| ERR_CIRCOM_BUILDER)
             .unwrap();
 
-        let circom_proof = GrothBn::prove(&proving_key, circuit, rng)
+        let circom_proof = GrothBn::prove(&proving_key, circuit, &mut rng)
             .map_err(|_| ERR_MAKING_PROOF)
             .unwrap();
 
@@ -407,6 +400,7 @@ mod test {
     use std::ffi::CString;
 
     #[test]
+    #[cfg(feature = "circom-2")]
     fn proof_verify() {
         let r1cs_path = CString::new("./fixtures/circom2_multiplier2.r1cs".as_bytes()).unwrap();
         let wasm_path = CString::new("./fixtures/circom2_multiplier2.wasm".as_bytes()).unwrap();
