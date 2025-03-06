@@ -156,7 +156,7 @@ impl From<&ark_groth16::VerifyingKey<Bn254>> for VerifyingKey {
             beta2: G2::from(&vk.beta_g2),
             gamma2: G2::from(&vk.gamma_g2),
             delta2: G2::from(&vk.delta_g2),
-            ic: Box::leak(Box::new(ic)).as_slice().as_ptr(),
+            ic: Box::into_raw(Box::new(ic).into_boxed_slice()) as *const G1,
             ic_len: len,
         }
     }
