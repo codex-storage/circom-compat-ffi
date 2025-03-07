@@ -1,4 +1,4 @@
-use std::ptr::slice_from_raw_parts;
+use std::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 
 use ark_bn254::{Bn254, Fq, Fq2, Fr, G1Affine, G2Affine};
 use ark_ff::{BigInteger, PrimeField};
@@ -6,7 +6,7 @@ use ark_serialize::CanonicalDeserialize;
 use ark_std::Zero;
 
 // Helper for converting a PrimeField to little endian byte slice
-fn slice_to_point<F: PrimeField>(point: &[u8; 32]) -> F {
+fn slice_to_point<F: PrimeField>(point: [u8; 32]) -> F {
     let bigint = F::BigInt::deserialize_uncompressed(&point[..]).expect("always works");
     F::from_bigint(bigint).unwrap()
 }
@@ -90,8 +90,8 @@ impl From<&ark_groth16::Proof<Bn254>> for Proof {
 
 impl From<G1> for G1Affine {
     fn from(src: G1) -> Self {
-        let x: Fq = slice_to_point(&src.x);
-        let y: Fq = slice_to_point(&src.y);
+        let x: Fq = slice_to_point(src.x);
+        let y: Fq = slice_to_point(src.y);
         if x.is_zero() && y.is_zero() {
             G1Affine::identity()
         } else {
@@ -102,12 +102,12 @@ impl From<G1> for G1Affine {
 
 impl From<G2> for G2Affine {
     fn from(src: G2) -> G2Affine {
-        let c0 = slice_to_point(&src.x[0]);
-        let c1 = slice_to_point(&src.x[1]);
+        let c0 = slice_to_point(src.x[0]);
+        let c1 = slice_to_point(src.x[1]);
         let x = Fq2::new(c0, c1);
 
-        let c0 = slice_to_point(&src.y[0]);
-        let c1 = slice_to_point(&src.y[1]);
+        let c0 = slice_to_point(src.y[0]);
+        let c1 = slice_to_point(src.y[1]);
         let y = Fq2::new(c0, c1);
 
         if x.is_zero() && y.is_zero() {
@@ -136,7 +136,7 @@ impl From<VerifyingKey> for ark_groth16::VerifyingKey<Bn254> {
             gamma_g2: src.gamma2.into(),
             delta_g2: src.delta2.into(),
             gamma_abc_g1: unsafe {
-                std::slice::from_raw_parts(src.ic, src.ic_len)
+                (*slice_from_raw_parts(src.ic, src.ic_len))
                     .iter()
                     .map(|p| (*p).into())
                     .collect()
@@ -145,10 +145,39 @@ impl From<VerifyingKey> for ark_groth16::VerifyingKey<Bn254> {
     }
 }
 
+impl VerifyingKey {
+    pub fn free(mut self) {
+        unsafe {
+            if !self.ic.is_null() && self.ic_len > 0 {
+                drop(Box::from_raw(slice_from_raw_parts_mut(
+                    self.ic as *mut G1,
+                    self.ic_len,
+                )));
+                self.ic = std::ptr::null();
+                self.ic_len = 0;
+            }
+        }
+    }
+}
+
+impl Inputs {
+    pub fn free(mut self) {
+        unsafe {
+            if !self.elms.is_null() && self.len > 0 {
+                drop(Box::from_raw(slice_from_raw_parts_mut(
+                    self.elms as *mut [u8; 32],
+                    self.len,
+                )));
+                self.elms = std::ptr::null();
+                self.len = 0;
+            }
+        }
+    }
+}
+
 impl From<&ark_groth16::VerifyingKey<Bn254>> for VerifyingKey {
     fn from(vk: &ark_groth16::VerifyingKey<Bn254>) -> Self {
-        let mut ic: Vec<G1> = vk.gamma_abc_g1.iter().map(|p| p.into()).collect();
-        ic.shrink_to_fit();
+        let ic: Vec<G1> = vk.gamma_abc_g1.iter().map(|p| p.into()).collect();
 
         let len = ic.len();
         Self {
@@ -164,12 +193,10 @@ impl From<&ark_groth16::VerifyingKey<Bn254>> for VerifyingKey {
 
 impl From<&[Fr]> for Inputs {
     fn from(src: &[Fr]) -> Self {
-        let mut els: Vec<[u8; 32]> = src.iter().map(|point| point_to_slice(*point)).collect();
-
-        els.shrink_to_fit();
+        let els: Vec<[u8; 32]> = src.iter().map(|point| point_to_slice(*point)).collect();
         let len = els.len();
         Self {
-            elms: Box::leak(els.into_boxed_slice()).as_ptr(),
+            elms: Box::into_raw(els.into_boxed_slice()) as *const [u8; 32],
             len: len,
         }
     }
@@ -178,9 +205,9 @@ impl From<&[Fr]> for Inputs {
 impl From<Inputs> for Vec<Fr> {
     fn from(src: Inputs) -> Self {
         let els: Vec<Fr> = unsafe {
-            (&*slice_from_raw_parts(src.elms, src.len))
+            (*slice_from_raw_parts(src.elms, src.len))
                 .iter()
-                .map(|point| slice_to_point(point))
+                .map(|point| slice_to_point(*point))
                 .collect()
         };
 
@@ -216,7 +243,7 @@ mod test {
     fn convert_fq() {
         let el = fq();
         let el2 = point_to_slice(el);
-        let el3: Fq = slice_to_point(&el2);
+        let el3: Fq = slice_to_point(el2);
         let el4 = point_to_slice(el3);
         assert_eq!(el, el3);
         assert_eq!(el2, el4);
@@ -226,7 +253,7 @@ mod test {
     fn convert_fr() {
         let el = fr();
         let el2 = point_to_slice(el);
-        let el3: Fr = slice_to_point(&el2);
+        let el3: Fr = slice_to_point(el2);
         let el4 = point_to_slice(el3);
         assert_eq!(el, el3);
         assert_eq!(el2, el4);
@@ -264,6 +291,7 @@ mod test {
         let vk_ffi = &VerifyingKey::from(&vk);
         let ark_vk: ark_groth16::VerifyingKey<Bn254> = (*vk_ffi).into();
         assert_eq!(ark_vk, vk);
+        vk_ffi.free();
     }
 
     #[test]
